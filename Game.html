@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Path Tracing Game</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 30px; }
+    #grid { display: grid; grid-template-columns: repeat(5, 60px); grid-gap: 5px; justify-content: center; }
+    .cell {
+      width: 60px; height: 60px;
+      display: flex; align-items: center; justify-content: center;
+      background-color: #eee; border: 1px solid #aaa;
+      cursor: pointer; user-select: none;
+    }
+    .selected { background-color: lightgreen; }
+    .best { background-color: gold; }
+    .start { background-color: #add8e6 !important; }
+    .end { background-color: #ff9999 !important; }
+  </style>
+</head>
+<body>
+  <h1>Path Tracing Game</h1>
+  <div id="grid"></div>
+  <div style="margin-top: 10px;">
+    <button onclick="checkPath()">Sprawdź ścieżkę</button>
+    <button onclick="resetPath()">Resetuj ścieżkę</button>
+    <button onclick="createBoard()">Nowa plansza</button>
+  </div>
+  <p id="result"></p>
+
+  <script>
+    const size = 5;
+    const grid = document.getElementById("grid");
+    const result = document.getElementById("result");
+    let path = [];
+    let start = null;
+    let end = null;
+
+    function getRandomEdgeCell() {
+      const edge = Math.floor(Math.random() * 4);
+      let x, y;
+      switch (edge) {
+        case 0: x = Math.floor(Math.random() * size); y = 0; break;
+        case 1: x = size - 1; y = Math.floor(Math.random() * size); break;
+        case 2: x = Math.floor(Math.random() * size); y = size - 1; break;
+        case 3: x = 0; y = Math.floor(Math.random() * size); break;
+      }
+      return { x, y };
+    }
+
+    function createBoard() {
+      grid.innerHTML = "";
+      result.innerHTML = "";
+      path = [];
+      document.querySelectorAll(".cell").forEach(c => c.classList.remove("best"));
+
+      do {
+        start = getRandomEdgeCell();
+        end = getRandomEdgeCell();
+      } while (Math.abs(start.x - end.x) + Math.abs(start.y - end.y) < 5);
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const value = Math.floor(Math.random() * 15) - 5;
+          const div = document.createElement("div");
+          div.className = "cell";
+          div.textContent = value;
+          div.dataset.x = x;
+          div.dataset.y = y;
+          div.dataset.value = value;
+
+          if (x === start.x && y === start.y) div.classList.add("start");
+          if (x === end.x && y === end.y) div.classList.add("end");
+
+          div.addEventListener("click", () => {
+            const key = `${x},${y}`;
+
+            if (path.length === 0) {
+              if (x === start.x && y === start.y) {
+                path.push(key);
+                div.classList.remove("start");
+                div.classList.add("selected");
+              }
+              return;
+            }
+
+            if (path.includes(key)) return;
+
+            const [lastX, lastY] = path[path.length - 1].split(",").map(Number);
+            const dx = Math.abs(lastX - x);
+            const dy = Math.abs(lastY - y);
+            const isNeighbor = (dx + dy === 1);
+
+            if (isNeighbor) {
+              path.push(key);
+              div.classList.add("selected");
+
+              if (x === end.x && y === end.y) {
+                checkPath();
+              }
+            }
+          });
+
+          grid.appendChild(div);
+        }
+      }
+    }
+
+    function getCell(x, y) {
+      return [...document.querySelectorAll(".cell")].find(
+        c => +c.dataset.x === x && +c.dataset.y === y
+      );
+    }
+
+    function checkPath() {
+      const playerCost = path.reduce((sum, key) => {
+        const [x, y] = key.split(",").map(Number);
+        const cell = getCell(x, y);
+        return sum + parseInt(cell.dataset.value);
+      }, 0);
+
+      let best = { path: [], cost: Infinity };
+
+      function dfs(x, y, visited, cost, steps) {
+        if (x === end.x && y === end.y) {
+          if (cost < best.cost) best = { path: [...steps], cost };
+          return;
+        }
+
+        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+        for (const [dx, dy] of directions) {
+          const nx = x + dx, ny = y + dy;
+          if (
+            nx >= 0 && nx < size &&
+            ny >= 0 && ny < size &&
+            !visited.has(`${nx},${ny}`)
+          ) {
+            const cell = getCell(nx, ny);
+            visited.add(`${nx},${ny}`);
+            steps.push(`${nx},${ny}`);
+            dfs(nx, ny, visited, cost + parseInt(cell.dataset.value), steps);
+            steps.pop();
+            visited.delete(`${nx},${ny}`);
+          }
+        }
+      }
+
+      const startCell = getCell(start.x, start.y);
+      dfs(start.x, start.y, new Set([`${start.x},${start.y}`]), parseInt(startCell.dataset.value), [`${start.x},${start.y}`]);
+
+      document.querySelectorAll(".best").forEach(c => c.classList.remove("best"));
+      best.path.forEach(key => {
+        const [x, y] = key.split(",").map(Number);
+        getCell(x, y).classList.add("best");
+      });
+
+      result.innerHTML = `Twoja ścieżka: ${playerCost} pkt<br>Najlepsza ścieżka: ${best.cost} pkt`;
+    }
+
+    function resetPath() {
+      path = [];
+      document.querySelectorAll(".cell").forEach(cell => {
+        cell.classList.remove("selected");
+        const x = parseInt(cell.dataset.x);
+        const y = parseInt(cell.dataset.y);
+        if (x === start.x && y === start.y) {
+          cell.classList.add("start");
+        }
+      });
+    }
+
+    createBoard();
+  </script>
+</body>
+</html>
